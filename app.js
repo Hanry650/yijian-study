@@ -1617,7 +1617,19 @@ function init() {
     }
 }
 
-// 首页错题本按钮
+// 首页按钮事件
+document.getElementById('home-start-btn').addEventListener('click', () => {
+    showConfigScreen();
+    // 高亮开始复习按钮
+    setTimeout(() => document.getElementById('start-btn').focus(), 100);
+});
+
+document.getElementById('home-study-btn').addEventListener('click', () => {
+    showConfigScreen();
+    // 高亮学习模式按钮
+    setTimeout(() => document.getElementById('study-btn').focus(), 100);
+});
+
 document.getElementById('home-wrong-bank-btn').addEventListener('click', () => {
     showConfigScreen();
     showWrongBank();
