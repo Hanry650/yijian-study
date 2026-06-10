@@ -636,15 +636,68 @@ function showStudyQuestion() {
 document.getElementById('study-next-btn').addEventListener('click', () => {
     studyIndex++;
     if (studyIndex >= studyQuestions.length) {
-        if (confirm('已学完所有题目，是否返回首页？')) {
-            showConfigScreen();
-        } else {
-            studyIndex = studyQuestions.length - 1;
-        }
+        showStudyCompleteDialog();
     } else {
         showStudyQuestion();
     }
 });
+
+// ==================== 学习模式完成弹窗 ====================
+function showStudyCompleteDialog() {
+    // 获取未选中的题目
+    const selectedChapters = getSelectedChapters();
+    const allQuestions = questions;
+    let unselectedQuestions = [];
+
+    if (!selectedChapters.includes('all')) {
+        unselectedQuestions = allQuestions.filter(q => !selectedChapters.includes(q.chapter));
+    }
+
+    // 创建弹窗
+    const modal = document.createElement('div');
+    modal.id = 'study-complete-modal';
+    modal.className = 'modal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;';
+
+    let contentHtml = `
+        <div style="background:#fff;border-radius:12px;padding:30px;max-width:400px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.2);text-align:center;">
+            <div style="font-size:48px;margin-bottom:15px;">🎉</div>
+            <h3 style="margin-bottom:10px;color:#2d3748;">学习完成！</h3>
+            <p style="margin-bottom:25px;color:#4a5568;">已完成当前选择的 ${studyQuestions.length} 道题目</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <button id="study-complete-home" class="primary-btn" style="width:100%;">🏠 返回首页</button>
+    `;
+
+    if (unselectedQuestions.length > 0) {
+        contentHtml += `<button id="study-complete-continue" class="secondary-btn" style="width:100%;">📚 继续学习其他 ${unselectedQuestions.length} 道未选中题目</button>`;
+    }
+
+    contentHtml += `
+            </div>
+        </div>
+    `;
+
+    modal.innerHTML = contentHtml;
+    document.body.appendChild(modal);
+
+    // 返回首页
+    document.getElementById('study-complete-home').addEventListener('click', () => {
+        document.body.removeChild(modal);
+        showConfigScreen();
+    });
+
+    // 继续学习未选中题目
+    const continueBtn = document.getElementById('study-complete-continue');
+    if (continueBtn) {
+        continueBtn.addEventListener('click', () => {
+            document.body.removeChild(modal);
+            // 切换到全部章节，开始学习
+            document.querySelector('input[value="all"]').checked = true;
+            renderChapterList();
+            startStudy();
+        });
+    }
+}
 
 document.getElementById('study-prev-btn').addEventListener('click', () => {
     if (studyIndex > 0) {
@@ -1302,6 +1355,40 @@ function showResult() {
 
     // 更新结果页上传云端按钮显示
     updateCloudUploadButtons();
+
+    // 添加"继续做其他题目"按钮（如果有未选中的题目）
+    addContinueOtherQuestionsButton();
+}
+
+// ==================== 添加继续做其他题目按钮 ====================
+function addContinueOtherQuestionsButton() {
+    // 移除已有的按钮
+    const existingBtn = document.getElementById('continue-other-btn');
+    if (existingBtn) existingBtn.remove();
+
+    // 获取未选中的题目
+    const selectedChapters = getSelectedChapters();
+    if (selectedChapters.includes('all')) return; // 全部章节已选，不需要继续
+
+    const unselectedQuestions = questions.filter(q => !selectedChapters.includes(q.chapter));
+    if (unselectedQuestions.length === 0) return; // 没有未选中的题目
+
+    // 创建继续按钮
+    const btnGroup = document.querySelector('#result-screen .btn-group');
+    const continueBtn = document.createElement('button');
+    continueBtn.id = 'continue-other-btn';
+    continueBtn.className = 'secondary-btn';
+    continueBtn.style.cssText = 'background: #38a169; color: white; border-color: #38a169;';
+    continueBtn.innerHTML = `📚 继续做其他 ${unselectedQuestions.length} 道未选中题目`;
+
+    continueBtn.addEventListener('click', () => {
+        // 切换到全部章节
+        document.querySelector('input[value="all"]').checked = true;
+        renderChapterList();
+        startQuiz();
+    });
+
+    btnGroup.appendChild(continueBtn);
 }
 
 // ==================== 再来一轮 / 只练错题 ====================
