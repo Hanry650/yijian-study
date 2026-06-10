@@ -311,26 +311,44 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
     }
 });
 
+// 提取章节编号前缀（如 "1.1.1 建设工程" → "1.1.1"）
+function extractChapterPrefix(chapterName) {
+    if (!chapterName) return '';
+    // 匹配开头数字.数字.数字... 的模式
+    const match = chapterName.match(/^(\d+(?:\.\d+)*)/);
+    return match ? match[1] : chapterName;
+}
+
 function parseQuestions(data) {
     questions = [];
     chapters = new Set();
+    const chapterPrefixMap = new Map(); // 编号前缀 -> 显示名称
 
     // 跳过表头，从第二行开始
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
         if (!row || row.length < 2) continue;
 
-        const chapter = String(row[0] || '').trim();
+        const rawChapter = String(row[0] || '').trim();
         const question = String(row[1] || '').trim();
         const answer = String(row[2] || '').trim();
 
         if (!question || !answer) continue;
 
-        if (chapter) chapters.add(chapter);
+        // 提取编号前缀并统一章节名
+        const prefix = extractChapterPrefix(rawChapter);
+        const normalizedChapter = prefix || rawChapter || '未分类';
+
+        // 记录编号到显示名的映射（取最长的作为显示名）
+        if (prefix && (!chapterPrefixMap.has(prefix) || rawChapter.length > chapterPrefixMap.get(prefix).length)) {
+            chapterPrefixMap.set(prefix, rawChapter);
+        }
+
+        if (normalizedChapter) chapters.add(normalizedChapter);
 
         questions.push({
             id: i,
-            chapter: chapter || '未分类',
+            chapter: normalizedChapter,
             question: question,
             answer: answer
         });
@@ -348,6 +366,7 @@ function parseQuestions(data) {
 
     // 保存到 localStorage
     localStorage.setItem('questions', JSON.stringify(questions));
+    localStorage.setItem('chapterPrefixMap', JSON.stringify([...chapterPrefixMap]));
 }
 
 // ==================== 配置界面 ====================
@@ -357,22 +376,31 @@ function showConfigScreen() {
 
     // 保留"全部章节"选项，重建章节列表
     container.innerHTML = `
-        <label data-value="all" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;margin-bottom:8px;padding:10px 14px;border-radius:6px;background:#f7fafc;transition:background 0.2s;font-size:14px;width:100%;">
-            <input type="checkbox" value="all" checked style="width:18px;height:18px;accent-color:#4299e1;flex-shrink:0;">
-            <span style="flex:1;">全部章节</span>
-            <span style="color:#a0aec0;font-size:12px;">${allCount}题</span>
+        <label data-value="all" class="chapter-label">
+            <input type="checkbox" value="all" checked>
+            <span class="chapter-name">全部章节</span>
+            <span class="chapter-count">${allCount}题</span>
         </label>
     `;
+
+    // 获取编号到显示名的映射
+    let chapterPrefixMap = new Map();
+    try {
+        const stored = localStorage.getItem('chapterPrefixMap');
+        if (stored) chapterPrefixMap = new Map(JSON.parse(stored));
+    } catch (e) {}
 
     // 将章节按名称排序（保持Excel中的先后顺序）
     const sortedChapters = Array.from(chapters).sort((a, b) => a.localeCompare(b, 'zh-CN'));
 
     sortedChapters.forEach(ch => {
         const count = questions.filter(q => q.chapter === ch).length;
+        // 使用原始显示名（如果有的话）
+        const displayName = chapterPrefixMap.get(ch) || ch;
         const label = document.createElement('label');
         label.dataset.value = ch;
-        label.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;margin-bottom:8px;padding:10px 14px;border-radius:6px;background:#f7fafc;transition:background 0.2s;font-size:14px;width:100%;';
-        label.innerHTML = `<input type="checkbox" value="${escapeHtml(ch)}" style="width:18px;height:18px;accent-color:#4299e1;flex-shrink:0;"> <span style="flex:1;">${escapeHtml(ch)}</span> <span style="color:#a0aec0;font-size:12px;">${count}题</span>`;
+        label.className = 'chapter-label';
+        label.innerHTML = `<input type="checkbox" value="${escapeHtml(ch)}"> <span class="chapter-name">${escapeHtml(displayName)}</span> <span class="chapter-count">${count}题</span>`;
         container.appendChild(label);
     });
 
