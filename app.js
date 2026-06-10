@@ -1,4 +1,4 @@
-// 一建复习工具 - 核心逻辑
+// 一建做题/复习工具 - 核心逻辑
 
 // ==================== Supabase 配置 ====================
 // Supabase 项目配置
@@ -266,6 +266,7 @@ let wrongCounts = JSON.parse(localStorage.getItem('wrongCounts') || '{}');  // �
 let wrongQuestions = new Set(Object.keys(wrongCounts).map(Number));  // 错题ID集合（兼容旧数据）
 let currentQuestions = [];     // 当前轮次的题目列表
 let currentIndex = 0;          // 当前题目索引
+let quizSessionCount = 0;      // 本次做题已答题数
 let stats = {                 // 本轮统计
     total: 0,
     correct: 0,
@@ -523,19 +524,20 @@ document.querySelectorAll('input[name="count"]').forEach(radio => {
     });
 });
 
-// ==================== 开始复习 ====================
+// ==================== 做题模式 ====================
 document.getElementById('start-btn').addEventListener('click', startQuiz);
 
-// ==================== 学习模式 ====================
+// ==================== 复习模式 ====================
 document.getElementById('study-btn').addEventListener('click', startStudy);
 document.getElementById('home-study-btn').addEventListener('click', () => {
     showConfigScreen();
-    // 高亮学习模式按钮
+    // 高亮复习模式按钮
     setTimeout(() => document.getElementById('study-btn').focus(), 100);
 });
 
 let studyQuestions = [];
 let studyIndex = 0;
+let studySessionCount = 0; // 本次复习已看题数
 
 function startStudy() {
     const selectedChapters = getSelectedChapters();
@@ -580,6 +582,7 @@ function startStudy() {
 
     studyQuestions = filtered;
     studyIndex = 0;
+    studySessionCount = 0; // 重置计数
 
     showScreen('study');
     showStudyQuestion();
@@ -593,6 +596,10 @@ function showStudyQuestion() {
     document.getElementById('study-progress-fill').style.width = progress + '%';
     document.getElementById('study-progress-text').textContent =
         `${studyIndex + 1} / ${studyQuestions.length}`;
+
+    // 更新本次复习计数
+    studySessionCount = Math.max(studySessionCount, studyIndex + 1);
+    document.getElementById('study-session-count').textContent = `本次已复习 ${studySessionCount} 题`;
 
     // 显示章节
     document.getElementById('study-chapter-tag').textContent = q.chapter;
@@ -632,7 +639,7 @@ function showStudyQuestion() {
     document.getElementById('study-prev-btn').style.opacity = studyIndex === 0 ? '0.5' : '1';
 }
 
-// 学习模式按钮事件
+// 复习模式按钮事件
 document.getElementById('study-next-btn').addEventListener('click', () => {
     studyIndex++;
     if (studyIndex >= studyQuestions.length) {
@@ -642,7 +649,7 @@ document.getElementById('study-next-btn').addEventListener('click', () => {
     }
 });
 
-// ==================== 学习模式完成弹窗 ====================
+// ==================== 复习模式完成弹窗 ====================
 function showStudyCompleteDialog() {
     // 获取未选中的题目
     const selectedChapters = getSelectedChapters();
@@ -662,14 +669,15 @@ function showStudyCompleteDialog() {
     let contentHtml = `
         <div style="background:#fff;border-radius:12px;padding:30px;max-width:400px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.2);text-align:center;">
             <div style="font-size:48px;margin-bottom:15px;">🎉</div>
-            <h3 style="margin-bottom:10px;color:#2d3748;">学习完成！</h3>
-            <p style="margin-bottom:25px;color:#4a5568;">已完成当前选择的 ${studyQuestions.length} 道题目</p>
+            <h3 style="margin-bottom:10px;color:#2d3748;">复习完成！</h3>
+            <p style="margin-bottom:10px;color:#4a5568;">本次共复习了 ${studySessionCount} 道题目</p>
+            <p style="margin-bottom:25px;color:#718096;font-size:13px;">已完成当前选择的全部 ${studyQuestions.length} 道题目</p>
             <div style="display:flex;flex-direction:column;gap:10px;">
                 <button id="study-complete-home" class="primary-btn" style="width:100%;">🏠 返回首页</button>
     `;
 
     if (unselectedQuestions.length > 0) {
-        contentHtml += `<button id="study-complete-continue" class="secondary-btn" style="width:100%;">📚 继续学习其他 ${unselectedQuestions.length} 道未选中题目</button>`;
+        contentHtml += `<button id="study-complete-continue" class="secondary-btn" style="width:100%;">📚 继续复习其他 ${unselectedQuestions.length} 道未选中题目</button>`;
     }
 
     contentHtml += `
@@ -686,12 +694,12 @@ function showStudyCompleteDialog() {
         showConfigScreen();
     });
 
-    // 继续学习未选中题目
+    // 继续复习未选中题目
     const continueBtn = document.getElementById('study-complete-continue');
     if (continueBtn) {
         continueBtn.addEventListener('click', () => {
             document.body.removeChild(modal);
-            // 切换到全部章节，开始学习
+            // 切换到全部章节，开始复习
             document.querySelector('input[value="all"]').checked = true;
             renderChapterList();
             startStudy();
@@ -707,7 +715,7 @@ document.getElementById('study-prev-btn').addEventListener('click', () => {
 });
 
 document.getElementById('study-end-btn').addEventListener('click', () => {
-    if (confirm('确定要结束学习吗？')) {
+    if (confirm('确定要结束本轮复习吗？')) {
         showConfigScreen();
     }
 });
@@ -769,6 +777,7 @@ function startQuiz() {
 
     currentQuestions = finalQuestions;
     currentIndex = 0;
+    quizSessionCount = 0; // 重置做题计数
     stats = { total: finalQuestions.length, correct: 0, wrong: 0, skip: 0, wrongList: [] };
 
     showScreen('quiz');
@@ -842,6 +851,9 @@ function showQuestion() {
     document.getElementById('progress-fill').style.width = progress + '%';
     document.getElementById('progress-text').textContent =
         `${currentIndex + 1} / ${currentQuestions.length}`;
+
+    // 更新本次做题计数
+    document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
 
     // 显示章节
     document.getElementById('chapter-tag').textContent = q.chapter;
@@ -998,6 +1010,8 @@ function checkBlankAnswers(q) {
         document.querySelector('.result-header').className = 'result-header correct';
 
         stats.correct++;
+        quizSessionCount++;
+        document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.delete(q.id);
 
         delete wrongCounts[q.id];
@@ -1018,6 +1032,8 @@ function checkBlankAnswers(q) {
         document.querySelector('.result-header').className = 'result-header wrong';
 
         stats.wrong++;
+        quizSessionCount++;
+        document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.add(q.id);
         stats.wrongList.push({
             question: q.question,
@@ -1055,6 +1071,8 @@ function checkFreeTextAnswer(q) {
         document.querySelector('.result-header').className = 'result-header correct';
 
         stats.correct++;
+        quizSessionCount++;
+        document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.delete(q.id);
 
         document.getElementById('correct-text').textContent = q.answer;
@@ -1073,6 +1091,8 @@ function checkFreeTextAnswer(q) {
         document.querySelector('.result-header').className = 'result-header wrong';
 
         stats.wrong++;
+        quizSessionCount++;
+        document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.add(q.id);
         stats.wrongList.push({
             question: q.question,
@@ -1241,6 +1261,8 @@ document.getElementById('show-answer-btn').addEventListener('click', () => {
     }
 
     stats.skip++;
+    quizSessionCount++;
+    document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
     wrongQuestions.add(q.id);
 
     wrongCounts[q.id] = (wrongCounts[q.id] || 0) + 1;
@@ -1316,16 +1338,16 @@ document.getElementById('skip-btn').addEventListener('click', () => {
     }
 });
 
-// ==================== 结束复习 ====================
+// ==================== 结束做题 ====================
 document.getElementById('end-btn').addEventListener('click', () => {
-    if (confirm('确定要结束本轮复习吗？')) {
+    if (confirm('确定要结束本轮做题吗？')) {
         showResult();
     }
 });
 
 // ==================== 返回首页 ====================
 document.getElementById('back-home-btn').addEventListener('click', () => {
-    if (confirm('返回首页将结束本轮复习，确定吗？')) {
+    if (confirm('返回首页将结束本轮做题，确定吗？')) {
         showConfigScreen();
     }
 });
@@ -1784,13 +1806,13 @@ function init() {
 // 首页按钮事件
 document.getElementById('home-start-btn').addEventListener('click', () => {
     showConfigScreen();
-    // 高亮开始复习按钮
+    // 高亮做题模式按钮
     setTimeout(() => document.getElementById('start-btn').focus(), 100);
 });
 
 document.getElementById('home-study-btn').addEventListener('click', () => {
     showConfigScreen();
-    // 高亮学习模式按钮
+    // 高亮复习模式按钮
     setTimeout(() => document.getElementById('study-btn').focus(), 100);
 });
 
