@@ -319,6 +319,19 @@ function extractChapterPrefix(chapterName) {
     return match ? match[1] : chapterName;
 }
 
+// 数字版本比较（支持 1.1.10 > 1.1.2）
+function compareVersion(a, b) {
+    const partsA = a.split('.').map(Number);
+    const partsB = b.split('.').map(Number);
+    const len = Math.max(partsA.length, partsB.length);
+    for (let i = 0; i < len; i++) {
+        const numA = partsA[i] || 0;
+        const numB = partsB[i] || 0;
+        if (numA !== numB) return numA - numB;
+    }
+    return 0;
+}
+
 function parseQuestions(data) {
     questions = [];
     chapters = new Set();
@@ -354,11 +367,11 @@ function parseQuestions(data) {
         });
     }
 
-    // 按章节排序（保持Excel中的先后顺序）
+    // 按章节排序（使用数字版本比较，确保 1.1.6 < 1.1.10）
     questions.sort((a, b) => {
-        // 先按章节名称排序
+        // 先按章节编号排序
         if (a.chapter !== b.chapter) {
-            return a.chapter.localeCompare(b.chapter, 'zh-CN');
+            return compareVersion(a.chapter, b.chapter);
         }
         // 同一章节内按id排序（即Excel中的行顺序）
         return a.id - b.id;
@@ -369,8 +382,27 @@ function parseQuestions(data) {
     localStorage.setItem('chapterPrefixMap', JSON.stringify([...chapterPrefixMap]));
 }
 
+// 章节排序方向（true=正序，false=倒序）
+let chapterSortAsc = true;
+
 // ==================== 配置界面 ====================
 function showConfigScreen() {
+    renderChapterList();
+
+    // 显示统计
+    const wrongCount = questions.filter(q => wrongQuestions.has(q.id)).length;
+    document.getElementById('stats-info').innerHTML = `
+        题库共 <strong>${questions.length}</strong> 题，
+        已标记错题 <strong>${wrongCount}</strong> 题
+    `;
+
+    // 更新上传云端按钮显示
+    updateCloudUploadButtons();
+
+    showScreen('config');
+}
+
+function renderChapterList() {
     const container = document.getElementById('chapter-checkboxes');
     const allCount = questions.length;
 
@@ -390,8 +422,11 @@ function showConfigScreen() {
         if (stored) chapterPrefixMap = new Map(JSON.parse(stored));
     } catch (e) {}
 
-    // 将章节按名称排序（保持Excel中的先后顺序）
-    const sortedChapters = Array.from(chapters).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    // 将章节按编号排序（使用数字版本比较）
+    let sortedChapters = Array.from(chapters).sort((a, b) => compareVersion(a, b));
+    if (!chapterSortAsc) {
+        sortedChapters.reverse();
+    }
 
     sortedChapters.forEach(ch => {
         const count = questions.filter(q => q.chapter === ch).length;
@@ -407,18 +442,18 @@ function showConfigScreen() {
     // 绑定章节多选事件
     bindChapterCheckboxEvents();
 
-    // 显示统计
-    const wrongCount = questions.filter(q => wrongQuestions.has(q.id)).length;
-    document.getElementById('stats-info').innerHTML = `
-        题库共 <strong>${questions.length}</strong> 题，
-        已标记错题 <strong>${wrongCount}</strong> 题
-    `;
-
-    // 更新上传云端按钮显示
-    updateCloudUploadButtons();
-
-    showScreen('config');
+    // 更新排序按钮文字
+    const sortBtn = document.getElementById('chapter-sort-btn');
+    if (sortBtn) {
+        sortBtn.textContent = chapterSortAsc ? '🔃 倒序' : '🔃 正序';
+    }
 }
+
+// 章节排序按钮事件
+document.getElementById('chapter-sort-btn').addEventListener('click', () => {
+    chapterSortAsc = !chapterSortAsc;
+    renderChapterList();
+});
 
 function bindChapterCheckboxEvents() {
     const container = document.getElementById('chapter-checkboxes');
