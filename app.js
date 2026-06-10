@@ -267,6 +267,7 @@ let wrongQuestions = new Set(Object.keys(wrongCounts).map(Number));  // 错题ID
 let currentQuestions = [];     // 当前轮次的题目列表
 let currentIndex = 0;          // 当前题目索引
 let quizSessionCount = 0;      // 本次做题已答题数
+let quizAnsweredIndices = new Set(); // 记录已答/已跳过的题目索引，防止重复计数
 let stats = {                 // 本轮统计
     total: 0,
     correct: 0,
@@ -538,6 +539,7 @@ document.getElementById('home-study-btn').addEventListener('click', () => {
 let studyQuestions = [];
 let studyIndex = 0;
 let studySessionCount = 0; // 本次复习已看题数
+let studyVisitedIndices = new Set(); // 记录复习模式中已看过的题目索引
 
 function startStudy() {
     const selectedChapters = getSelectedChapters();
@@ -583,6 +585,7 @@ function startStudy() {
     studyQuestions = filtered;
     studyIndex = 0;
     studySessionCount = 0; // 重置计数
+    studyVisitedIndices = new Set(); // 重置已看记录
 
     showScreen('study');
     showStudyQuestion();
@@ -597,8 +600,11 @@ function showStudyQuestion() {
     document.getElementById('study-progress-text').textContent =
         `${studyIndex + 1} / ${studyQuestions.length}`;
 
-    // 更新本次复习计数
-    studySessionCount = Math.max(studySessionCount, studyIndex + 1);
+    // 更新本次复习计数（如果是新题则+1）
+    if (!studyVisitedIndices.has(studyIndex)) {
+        studyVisitedIndices.add(studyIndex);
+        studySessionCount++;
+    }
     document.getElementById('study-session-count').textContent = `本次已复习 ${studySessionCount} 题`;
 
     // 显示章节
@@ -778,6 +784,7 @@ function startQuiz() {
     currentQuestions = finalQuestions;
     currentIndex = 0;
     quizSessionCount = 0; // 重置做题计数
+    quizAnsweredIndices = new Set(); // 重置已答记录
     stats = { total: finalQuestions.length, correct: 0, wrong: 0, skip: 0, wrongList: [] };
 
     showScreen('quiz');
@@ -1010,7 +1017,10 @@ function checkBlankAnswers(q) {
         document.querySelector('.result-header').className = 'result-header correct';
 
         stats.correct++;
-        quizSessionCount++;
+        if (!quizAnsweredIndices.has(currentIndex)) {
+            quizAnsweredIndices.add(currentIndex);
+            quizSessionCount++;
+        }
         document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.delete(q.id);
 
@@ -1032,7 +1042,10 @@ function checkBlankAnswers(q) {
         document.querySelector('.result-header').className = 'result-header wrong';
 
         stats.wrong++;
-        quizSessionCount++;
+        if (!quizAnsweredIndices.has(currentIndex)) {
+            quizAnsweredIndices.add(currentIndex);
+            quizSessionCount++;
+        }
         document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.add(q.id);
         stats.wrongList.push({
@@ -1071,7 +1084,10 @@ function checkFreeTextAnswer(q) {
         document.querySelector('.result-header').className = 'result-header correct';
 
         stats.correct++;
-        quizSessionCount++;
+        if (!quizAnsweredIndices.has(currentIndex)) {
+            quizAnsweredIndices.add(currentIndex);
+            quizSessionCount++;
+        }
         document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.delete(q.id);
 
@@ -1091,7 +1107,10 @@ function checkFreeTextAnswer(q) {
         document.querySelector('.result-header').className = 'result-header wrong';
 
         stats.wrong++;
-        quizSessionCount++;
+        if (!quizAnsweredIndices.has(currentIndex)) {
+            quizAnsweredIndices.add(currentIndex);
+            quizSessionCount++;
+        }
         document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.add(q.id);
         stats.wrongList.push({
@@ -1261,7 +1280,10 @@ document.getElementById('show-answer-btn').addEventListener('click', () => {
     }
 
     stats.skip++;
-    quizSessionCount++;
+    if (!quizAnsweredIndices.has(currentIndex)) {
+        quizAnsweredIndices.add(currentIndex);
+        quizSessionCount++;
+    }
     document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
     wrongQuestions.add(q.id);
 
@@ -1329,6 +1351,11 @@ document.getElementById('skip-btn').addEventListener('click', () => {
 
     localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
     stats.skip++;
+    if (!quizAnsweredIndices.has(currentIndex)) {
+        quizAnsweredIndices.add(currentIndex);
+        quizSessionCount++;
+    }
+    document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
 
     currentIndex++;
     if (currentIndex >= currentQuestions.length) {
