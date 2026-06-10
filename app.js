@@ -336,6 +336,16 @@ function parseQuestions(data) {
         });
     }
 
+    // 按章节排序（保持Excel中的先后顺序）
+    questions.sort((a, b) => {
+        // 先按章节名称排序
+        if (a.chapter !== b.chapter) {
+            return a.chapter.localeCompare(b.chapter, 'zh-CN');
+        }
+        // 同一章节内按id排序（即Excel中的行顺序）
+        return a.id - b.id;
+    });
+
     // 保存到 localStorage
     localStorage.setItem('questions', JSON.stringify(questions));
 }
@@ -347,18 +357,22 @@ function showConfigScreen() {
 
     // 保留"全部章节"选项，重建章节列表
     container.innerHTML = `
-        <label data-value="all" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;margin-bottom:0;padding:6px 12px;border-radius:6px;background:#f7fafc;transition:background 0.2s;font-size:14px;">
-            <input type="checkbox" value="all" checked style="width:18px;height:18px;accent-color:#4299e1;">
-            全部章节 (${allCount}题)
+        <label data-value="all" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;margin-bottom:8px;padding:10px 14px;border-radius:6px;background:#f7fafc;transition:background 0.2s;font-size:14px;width:100%;">
+            <input type="checkbox" value="all" checked style="width:18px;height:18px;accent-color:#4299e1;flex-shrink:0;">
+            <span style="flex:1;">全部章节</span>
+            <span style="color:#a0aec0;font-size:12px;">${allCount}题</span>
         </label>
     `;
 
-    chapters.forEach(ch => {
+    // 将章节按名称排序（保持Excel中的先后顺序）
+    const sortedChapters = Array.from(chapters).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+
+    sortedChapters.forEach(ch => {
         const count = questions.filter(q => q.chapter === ch).length;
         const label = document.createElement('label');
         label.dataset.value = ch;
-        label.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;margin-bottom:0;padding:6px 12px;border-radius:6px;background:#f7fafc;transition:background 0.2s;font-size:14px;';
-        label.innerHTML = `<input type="checkbox" value="${escapeHtml(ch)}" style="width:18px;height:18px;accent-color:#4299e1;"> ${escapeHtml(ch)} (${count}题)`;
+        label.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;margin-bottom:8px;padding:10px 14px;border-radius:6px;background:#f7fafc;transition:background 0.2s;font-size:14px;width:100%;';
+        label.innerHTML = `<input type="checkbox" value="${escapeHtml(ch)}" style="width:18px;height:18px;accent-color:#4299e1;flex-shrink:0;"> <span style="flex:1;">${escapeHtml(ch)}</span> <span style="color:#a0aec0;font-size:12px;">${count}题</span>`;
         container.appendChild(label);
     });
 
