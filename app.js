@@ -97,6 +97,7 @@ async function cloudUpload() {
     const data = {
         questions: questions,
         wrongCounts: wrongCounts,
+        correctQuestions: [...correctQuestions],
         updatedAt: new Date().toISOString()
     };
 
@@ -171,6 +172,7 @@ async function cloudDownload() {
 function applyCloudData(cloudData) {
     questions = cloudData.questions || [];
     wrongCounts = cloudData.wrongCounts || {};
+    correctQuestions = new Set((cloudData.correctQuestions || []).map(Number));
 
     chapters = new Set();
     questions.forEach(q => { if (q.chapter) chapters.add(q.chapter); });
@@ -179,6 +181,7 @@ function applyCloudData(cloudData) {
     localStorage.setItem('questions', JSON.stringify(questions));
     localStorage.setItem('wrongCounts', JSON.stringify(wrongCounts));
     localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
+    localStorage.setItem('correctQuestions', JSON.stringify([...correctQuestions]));
     localStorage.setItem('lastCloudSync', cloudData.updatedAt || new Date().toISOString());
 
     updateCloudUI();
@@ -206,6 +209,11 @@ function mergeCloudData(cloudData) {
         wrongCounts[numId] = Math.max(wrongCounts[numId] || 0, count);
     });
 
+    // 合并做对记录
+    if (cloudData.correctQuestions) {
+        cloudData.correctQuestions.forEach(id => correctQuestions.add(Number(id)));
+    }
+
     chapters = new Set();
     questions.forEach(q => { if (q.chapter) chapters.add(q.chapter); });
     wrongQuestions = new Set(Object.keys(wrongCounts).map(Number));
@@ -213,6 +221,7 @@ function mergeCloudData(cloudData) {
     localStorage.setItem('questions', JSON.stringify(questions));
     localStorage.setItem('wrongCounts', JSON.stringify(wrongCounts));
     localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
+    localStorage.setItem('correctQuestions', JSON.stringify([...correctQuestions]));
     localStorage.setItem('lastCloudSync', cloudData.updatedAt || new Date().toISOString());
 
     updateCloudUI();
@@ -264,6 +273,7 @@ let questions = [];           // 全部题目
 let chapters = new Set();      // 章节集合
 let wrongCounts = JSON.parse(localStorage.getItem('wrongCounts') || '{}');  // 错题ID -> 错误次数
 let wrongQuestions = new Set(Object.keys(wrongCounts).map(Number));  // 错题ID集合（兼容旧数据）
+let correctQuestions = new Set(JSON.parse(localStorage.getItem('correctQuestions') || '[]'));  // 做对题目ID集合
 let currentQuestions = [];     // 当前轮次的题目列表
 let currentIndex = 0;          // 当前题目索引
 let quizSessionCount = 0;      // 本次做题已答题数
@@ -283,7 +293,8 @@ const screens = {
     quiz: document.getElementById('quiz-screen'),
     result: document.getElementById('result-screen'),
     wrongBank: document.getElementById('wrong-bank-screen'),
-    study: document.getElementById('study-screen')
+    study: document.getElementById('study-screen'),
+    questionBank: document.getElementById('question-bank-screen')
 };
 
 // ==================== 界面切换 ====================
@@ -335,9 +346,17 @@ function compareVersion(a, b) {
 }
 
 function parseQuestions(data) {
-    questions = [];
-    chapters = new Set();
     const chapterPrefixMap = new Map(); // 编号前缀 -> 显示名称
+
+    // 读取现有题库（用于合并）
+    let existingQuestions = questions.length > 0 ? questions : [];
+    let maxId = 0;
+    existingQuestions.forEach(q => {
+        if (q.id > maxId) maxId = q.id;
+    });
+
+    // 建立题目去重索引：以 "章节|题目|答案" 作为唯一键
+    const existingKeys = new Set(existingQuestions.map(q => `${q.chapter}|${q.question}|${q.answer}`));
 
     // 跳过表头，从第二行开始
     for (let i = 1; i < data.length; i++) {
@@ -359,10 +378,14 @@ function parseQuestions(data) {
             chapterPrefixMap.set(prefix, rawChapter);
         }
 
-        if (normalizedChapter) chapters.add(normalizedChapter);
+        // 去重：如果题目已存在则跳过
+        const key = `${normalizedChapter}|${question}|${answer}`;
+        if (existingKeys.has(key)) continue;
 
-        questions.push({
-            id: i,
+        existingKeys.add(key);
+        maxId++;
+        existingQuestions.push({
+            id: maxId,
             chapter: normalizedChapter,
             question: question,
             answer: answer
@@ -370,13 +393,19 @@ function parseQuestions(data) {
     }
 
     // 按章节排序（使用数字版本比较，确保 1.1.6 < 1.1.10）
-    questions.sort((a, b) => {
-        // 先按章节编号排序
+    existingQuestions.sort((a, b) => {
         if (a.chapter !== b.chapter) {
             return compareVersion(a.chapter, b.chapter);
         }
-        // 同一章节内按id排序（即Excel中的行顺序）
         return a.id - b.id;
+    });
+
+    questions = existingQuestions;
+
+    // 重建章节集合
+    chapters = new Set();
+    questions.forEach(q => {
+        if (q.chapter) chapters.add(q.chapter);
     });
 
     // 保存到 localStorage
@@ -415,6 +444,7 @@ function renderChapterList() {
             <span class="chapter-name">全部章节</span>
             <span class="chapter-count">${allCount}题</span>
         </label>
+        <div id="chapter-tree" class="chapter-tree"></div>
     `;
 
     // 获取编号到显示名的映射
@@ -430,16 +460,10 @@ function renderChapterList() {
         sortedChapters.reverse();
     }
 
-    sortedChapters.forEach(ch => {
-        const count = questions.filter(q => q.chapter === ch).length;
-        // 使用原始显示名（如果有的话）
-        const displayName = chapterPrefixMap.get(ch) || ch;
-        const label = document.createElement('label');
-        label.dataset.value = ch;
-        label.className = 'chapter-label';
-        label.innerHTML = `<input type="checkbox" value="${escapeHtml(ch)}"> <span class="chapter-name">${escapeHtml(displayName)}</span> <span class="chapter-count">${count}题</span>`;
-        container.appendChild(label);
-    });
+    // 构建章节树
+    const treeRoot = buildChapterTree(sortedChapters, chapterPrefixMap);
+    const treeContainer = document.getElementById('chapter-tree');
+    renderChapterTreeNode(treeRoot, treeContainer, 0);
 
     // 绑定章节多选事件
     bindChapterCheckboxEvents();
@@ -451,6 +475,113 @@ function renderChapterList() {
     }
 }
 
+// 构建章节树结构
+function buildChapterTree(chapterList, chapterPrefixMap) {
+    const root = { children: {}, isLeaf: false, chapter: null, displayName: '', count: 0 };
+
+    chapterList.forEach(ch => {
+        const parts = ch.split('.');
+        let node = root;
+        let path = '';
+
+        parts.forEach((part, index) => {
+            path = path ? `${path}.${part}` : part;
+            if (!node.children[path]) {
+                node.children[path] = {
+                    children: {},
+                    isLeaf: index === parts.length - 1,
+                    chapter: index === parts.length - 1 ? ch : path,
+                    displayName: chapterPrefixMap.get(path) || path,
+                    count: 0
+                };
+            }
+            node = node.children[path];
+        });
+
+        // 统计叶子节点题目数
+        node.count = questions.filter(q => q.chapter === ch).length;
+    });
+
+    // 向上汇总非叶子节点的题目数
+    sumChapterTreeCounts(root);
+
+    return root;
+}
+
+function sumChapterTreeCounts(node) {
+    const childKeys = Object.keys(node.children);
+    if (childKeys.length === 0) return node.count;
+
+    let total = 0;
+    childKeys.forEach(key => {
+        total += sumChapterTreeCounts(node.children[key]);
+    });
+    node.count = total;
+    return total;
+}
+
+function renderChapterTreeNode(node, container, level) {
+    const childKeys = Object.keys(node.children);
+    if (childKeys.length === 0) return;
+
+    // 按数字版本排序子节点
+    childKeys.sort((a, b) => compareVersion(a, b));
+    if (!chapterSortAsc) {
+        childKeys.reverse();
+    }
+
+    childKeys.forEach(key => {
+        const child = node.children[key];
+        const hasChildren = Object.keys(child.children).length > 0;
+
+        if (hasChildren) {
+            // 非叶子节点：可展开折叠
+            const nodeEl = document.createElement('div');
+            nodeEl.className = 'chapter-tree-node';
+
+            const header = document.createElement('div');
+            header.className = 'chapter-tree-header';
+            header.dataset.path = key;
+
+            header.innerHTML = `
+                <span class="chapter-tree-toggle">▼</span>
+                <input type="checkbox" value="${escapeHtml(child.chapter)}" data-is-group="true">
+                <span class="chapter-tree-label">${escapeHtml(child.displayName)}</span>
+                <span class="chapter-tree-count">${child.count}题</span>
+            `;
+
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'chapter-tree-children';
+            childrenContainer.dataset.parent = key;
+
+            renderChapterTreeNode(child, childrenContainer, level + 1);
+
+            nodeEl.appendChild(header);
+            nodeEl.appendChild(childrenContainer);
+            container.appendChild(nodeEl);
+
+            // 展开/折叠事件
+            const toggle = header.querySelector('.chapter-tree-toggle');
+            header.addEventListener('click', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                childrenContainer.classList.toggle('collapsed');
+                toggle.classList.toggle('collapsed');
+            });
+        } else {
+            // 叶子节点
+            const leaf = document.createElement('label');
+            leaf.className = 'chapter-tree-leaf';
+            leaf.dataset.value = child.chapter;
+            leaf.innerHTML = `
+                <input type="checkbox" value="${escapeHtml(child.chapter)}">
+                <span class="chapter-tree-label">${escapeHtml(child.displayName)}</span>
+                <span class="chapter-tree-count">${child.count}题</span>
+            `;
+            container.appendChild(leaf);
+        }
+    });
+}
+
 // 章节排序按钮事件
 document.getElementById('chapter-sort-btn').addEventListener('click', () => {
     chapterSortAsc = !chapterSortAsc;
@@ -460,28 +591,60 @@ document.getElementById('chapter-sort-btn').addEventListener('click', () => {
 function bindChapterCheckboxEvents() {
     const container = document.getElementById('chapter-checkboxes');
     const allCheckbox = container.querySelector('input[value="all"]');
-    const chapterCheckboxes = container.querySelectorAll('input[type="checkbox"]:not([value="all"])');
+    const treeCheckboxes = container.querySelectorAll('#chapter-tree input[type="checkbox"]');
 
     // "全部"选中时，取消所有单独章节
     allCheckbox.addEventListener('change', () => {
         if (allCheckbox.checked) {
-            chapterCheckboxes.forEach(cb => {
+            treeCheckboxes.forEach(cb => {
                 cb.checked = false;
-                cb.closest('label').classList.remove('checked');
+                const label = cb.closest('.chapter-tree-leaf');
+                if (label) label.classList.remove('checked');
             });
         }
         updateChapterSelectedCount();
     });
 
-    // 单独章节选中时，取消"全部"
-    chapterCheckboxes.forEach(cb => {
+    // 树中复选框变化事件
+    treeCheckboxes.forEach(cb => {
         cb.addEventListener('change', () => {
             if (cb.checked) {
                 allCheckbox.checked = false;
                 allCheckbox.closest('label').classList.remove('checked');
+
+                // 如果是父级节点，联动子节点
+                const isGroup = cb.dataset.isGroup === 'true';
+                if (isGroup) {
+                    const nodeEl = cb.closest('.chapter-tree-node');
+                    const childCheckboxes = nodeEl.querySelectorAll('.chapter-tree-children input[type="checkbox"]');
+                    childCheckboxes.forEach(childCb => {
+                        childCb.checked = true;
+                        const leaf = childCb.closest('.chapter-tree-leaf');
+                        if (leaf) leaf.classList.add('checked');
+                    });
+                }
+            } else {
+                // 取消父级节点时，取消所有子节点
+                const isGroup = cb.dataset.isGroup === 'true';
+                if (isGroup) {
+                    const nodeEl = cb.closest('.chapter-tree-node');
+                    const childCheckboxes = nodeEl.querySelectorAll('.chapter-tree-children input[type="checkbox"]');
+                    childCheckboxes.forEach(childCb => {
+                        childCb.checked = false;
+                        const leaf = childCb.closest('.chapter-tree-leaf');
+                        if (leaf) leaf.classList.remove('checked');
+                    });
+                }
             }
+
+            // 更新叶子节点样式
+            const leaf = cb.closest('.chapter-tree-leaf');
+            if (leaf) {
+                leaf.classList.toggle('checked', cb.checked);
+            }
+
             // 如果没有选中任何章节，自动选中"全部"
-            const anyChecked = Array.from(chapterCheckboxes).some(c => c.checked);
+            const anyChecked = Array.from(treeCheckboxes).some(c => c.checked);
             if (!anyChecked) {
                 allCheckbox.checked = true;
             }
@@ -508,8 +671,28 @@ function getSelectedChapters() {
     const allCheckbox = container.querySelector('input[value="all"]');
     if (allCheckbox.checked) return ['all'];
 
-    const checked = container.querySelectorAll('input[type="checkbox"]:checked');
-    return Array.from(checked).map(cb => cb.value);
+    // 收集所有选中的章节值（包括父节点自身，如果它对应实际章节）
+    const checkedValues = new Set();
+    const treeCheckboxes = container.querySelectorAll('#chapter-tree input[type="checkbox"]:checked');
+
+    treeCheckboxes.forEach(cb => {
+        const isGroup = cb.dataset.isGroup === 'true';
+        const chapterValue = cb.value;
+
+        // 如果这个值对应实际章节，则加入
+        if (chapters.has(chapterValue)) {
+            checkedValues.add(chapterValue);
+        }
+
+        if (isGroup) {
+            // 收集该组下所有叶子节点的值
+            const nodeEl = cb.closest('.chapter-tree-node');
+            const leafCheckboxes = nodeEl.querySelectorAll('.chapter-tree-children input[type="checkbox"]:not([data-is-group="true"])');
+            leafCheckboxes.forEach(leafCb => checkedValues.add(leafCb.value));
+        }
+    });
+
+    return Array.from(checkedValues);
 }
 
 // ==================== 自定义题数输入框显示/隐藏 ====================
@@ -1023,12 +1206,13 @@ function checkBlankAnswers(q) {
         }
         document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.delete(q.id);
+        correctQuestions.add(q.id);
 
         delete wrongCounts[q.id];
 
         localStorage.setItem('wrongCounts', JSON.stringify(wrongCounts));
-
         localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
+        localStorage.setItem('correctQuestions', JSON.stringify([...correctQuestions]));
 
         document.getElementById('submit-btn').classList.add('hidden');
         document.getElementById('next-btn').classList.remove('hidden');
@@ -1048,12 +1232,14 @@ function checkBlankAnswers(q) {
         }
         document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
         wrongQuestions.add(q.id);
+        correctQuestions.delete(q.id);
         stats.wrongList.push({
             question: q.question,
             userAnswer: userAnswers.join(' / '),
             correctAnswer: q._parsed.fullAnswer
         });
         localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
+        localStorage.setItem('correctQuestions', JSON.stringify([...correctQuestions]));
 
         document.getElementById('submit-btn').classList.add('hidden');
         document.getElementById('next-btn').classList.remove('hidden');
@@ -1286,12 +1472,14 @@ document.getElementById('show-answer-btn').addEventListener('click', () => {
     }
     document.getElementById('quiz-session-count').textContent = `本次已做 ${quizSessionCount} 题`;
     wrongQuestions.add(q.id);
+    correctQuestions.delete(q.id);
 
     wrongCounts[q.id] = (wrongCounts[q.id] || 0) + 1;
 
     localStorage.setItem('wrongCounts', JSON.stringify(wrongCounts));
 
     localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
+    localStorage.setItem('correctQuestions', JSON.stringify([...correctQuestions]));
 
     document.getElementById('submit-btn').classList.add('hidden');
     document.getElementById('next-btn').classList.remove('hidden');
@@ -1344,12 +1532,14 @@ document.getElementById('next-btn').addEventListener('click', () => {
 document.getElementById('skip-btn').addEventListener('click', () => {
     const q = currentQuestions[currentIndex];
     wrongQuestions.add(q.id);
+    correctQuestions.delete(q.id);
 
     wrongCounts[q.id] = (wrongCounts[q.id] || 0) + 1;
 
     localStorage.setItem('wrongCounts', JSON.stringify(wrongCounts));
 
     localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
+    localStorage.setItem('correctQuestions', JSON.stringify([...correctQuestions]));
     stats.skip++;
     if (!quizAnsweredIndices.has(currentIndex)) {
         quizAnsweredIndices.add(currentIndex);
@@ -1458,6 +1648,19 @@ let selectedWrongIds = new Set();
 // 打开错题库
 document.getElementById('wrong-bank-btn').addEventListener('click', showWrongBank);
 document.getElementById('back-from-wrong').addEventListener('click', () => showConfigScreen());
+
+// 打开题库总览
+document.getElementById('home-question-bank-btn').addEventListener('click', () => {
+    showConfigScreen();
+    showQuestionBank();
+});
+document.getElementById('back-from-question-bank').addEventListener('click', () => showConfigScreen());
+
+// 题库搜索
+document.getElementById('question-bank-search-btn').addEventListener('click', renderQuestionBank);
+document.getElementById('question-bank-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') renderQuestionBank();
+});
 
 // 搜索
 document.getElementById('wrong-search-btn').addEventListener('click', renderWrongBank);
@@ -1636,6 +1839,80 @@ function removeFromWrong(id) {
     renderWrongBank();
 }
 
+// ==================== 题库总览 ====================
+function showQuestionBank() {
+    showScreen('questionBank');
+    renderQuestionBank();
+}
+
+function renderQuestionBank() {
+    const searchTerm = document.getElementById('question-bank-search').value.trim().toLowerCase();
+
+    let list = questions;
+    if (searchTerm) {
+        list = list.filter(q =>
+            q.question.toLowerCase().includes(searchTerm) ||
+            q.answer.toLowerCase().includes(searchTerm) ||
+            q.chapter.toLowerCase().includes(searchTerm)
+        );
+    }
+
+    const total = questions.length;
+    const doneCount = questions.filter(q => correctQuestions.has(q.id)).length;
+    const wrongCount = questions.filter(q => wrongQuestions.has(q.id)).length;
+    const untouchedCount = total - doneCount - wrongCount;
+
+    document.getElementById('question-bank-stats').innerHTML = `
+        共 <strong>${total}</strong> 题，
+        已做对 <strong style="color:#38a169;">${doneCount}</strong> 题，
+        错题 <strong style="color:#e53e3e;">${wrongCount}</strong> 题，
+        未做 <strong style="color:#718096;">${untouchedCount}</strong> 题
+        ${searchTerm ? `，搜索匹配 <strong>${list.length}</strong> 道` : ''}
+    `;
+
+    const container = document.getElementById('question-bank-list');
+
+    if (list.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <span class="icon">📝</span>
+                <p>${total === 0 ? '暂无题目，请先上传题库' : '没有找到匹配的题目'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = list.map(q => {
+        let statusClass = 'untouched';
+        let statusText = '未做';
+        if (wrongQuestions.has(q.id)) {
+            statusClass = 'wrong';
+            statusText = '错题';
+        } else if (correctQuestions.has(q.id)) {
+            statusClass = 'done';
+            statusText = '已做对';
+        }
+
+        return `
+            <div class="question-bank-item ${statusClass}" data-id="${q.id}">
+                <div class="item-header">
+                    <span class="item-chapter">${escapeHtml(q.chapter)}</span>
+                    <span class="item-status">${statusText}</span>
+                </div>
+                <div class="item-question">${escapeHtml(q.question)}</div>
+                <div class="item-answer"><strong>答案：</strong>${escapeHtml(q.answer)}</div>
+            </div>
+        `;
+    }).join('');
+
+    // 点击展开/折叠答案
+    container.querySelectorAll('.question-bank-item').forEach(item => {
+        item.addEventListener('click', () => {
+            item.classList.toggle('expanded');
+        });
+    });
+}
+
 // 导出错题为 Excel
 function exportWrongQuestions() {
     const wrongList = questions.filter(q => wrongQuestions.has(q.id));
@@ -1667,7 +1944,8 @@ function exportData() {
         version: 1,
         exportDate: new Date().toISOString(),
         questions: questions,
-        wrongCounts: wrongCounts
+        wrongCounts: wrongCounts,
+        correctQuestions: [...correctQuestions]
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1759,8 +2037,9 @@ function applyImport(data, mode) {
         // 完全覆盖
         questions = data.questions;
         wrongCounts = data.wrongCounts || {};
+        correctQuestions = new Set(data.correctQuestions ? data.correctQuestions.map(Number) : []);
     } else {
-        // 合并：题库去重合并，错题次数取最大值
+        // 合并：题库去重合并，错题次数取最大值，做对记录保留
         const existingIds = new Set(questions.map(q => q.id));
         data.questions.forEach(q => {
             if (!existingIds.has(q.id)) {
@@ -1773,6 +2052,10 @@ function applyImport(data, mode) {
                 const numId = parseInt(id, 10);
                 wrongCounts[numId] = Math.max(wrongCounts[numId] || 0, count);
             });
+        }
+
+        if (data.correctQuestions) {
+            data.correctQuestions.forEach(id => correctQuestions.add(Number(id)));
         }
     }
 
@@ -1789,6 +2072,7 @@ function applyImport(data, mode) {
     localStorage.setItem('questions', JSON.stringify(questions));
     localStorage.setItem('wrongCounts', JSON.stringify(wrongCounts));
     localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
+    localStorage.setItem('correctQuestions', JSON.stringify([...correctQuestions]));
 
     // 刷新界面
     if (questions.length > 0) {
@@ -1824,6 +2108,16 @@ function init() {
         }
     }
 
+    // 加载做对题目记录
+    const correctCached = localStorage.getItem('correctQuestions');
+    if (correctCached) {
+        try {
+            correctQuestions = new Set(JSON.parse(correctCached).map(Number));
+        } catch (e) {
+            console.error('加载做对记录失败', e);
+        }
+    }
+
     // 首页显示错题本按钮（如果有缓存题目）
     if (cached && questions.length > 0) {
         document.getElementById('home-actions').style.display = 'block';
@@ -1841,6 +2135,11 @@ document.getElementById('home-study-btn').addEventListener('click', () => {
     showConfigScreen();
     // 高亮复习模式按钮
     setTimeout(() => document.getElementById('study-btn').focus(), 100);
+});
+
+document.getElementById('home-question-bank-btn').addEventListener('click', () => {
+    showConfigScreen();
+    showQuestionBank();
 });
 
 document.getElementById('home-wrong-bank-btn').addEventListener('click', () => {

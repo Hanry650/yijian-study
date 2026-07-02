@@ -64,6 +64,7 @@
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                     <button id="home-start-btn" class="primary-btn" style="flex: 1; min-width: 120px;">✏️ 做题模式</button>
                     <button id="home-study-btn" class="primary-btn" style="flex: 1; min-width: 120px; background: #48bb78;">📖 复习模式</button>
+                    <button id="home-question-bank-btn" class="secondary-btn" style="flex: 1; min-width: 120px;">📋 题库</button>
                     <button id="home-wrong-bank-btn" class="secondary-btn" style="flex: 1; min-width: 120px;">📚 错题本</button>
                 </div>
             </div>
@@ -78,8 +79,9 @@
                         <span>出题范围：<span id="chapter-selected-count" style="font-weight:400;color:#718096;font-size:14px;"></span></span>
                         <button id="chapter-sort-btn" class="text-btn" style="font-size:13px;padding:4px 10px;">🔃 倒序</button>
                     </label>
-                    <div id="chapter-checkboxes" class="checkbox-group" style="display:flex;flex-direction:column;gap:0;max-height:250px;overflow-y:auto;padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;">
+                    <div id="chapter-checkboxes" class="checkbox-group" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;margin-bottom:0;padding:6px 12px;border-radius:6px;background:#f7fafc;transition:background 0.2s;"><input type="checkbox" value="all" checked style="width:18px;height:18px;accent-color:#4299e1;"> 全部章节</label>
+                        <div id="chapter-tree" class="chapter-tree"></div>
                     </div>
                 </div>
                 <div class="option-group">
@@ -180,6 +182,28 @@
                 <button id="end-btn" class="text-btn">结束做题</button>
                 <button id="back-home-btn" class="text-btn">返回首页</button>
             </div>
+        </div>
+
+        <!-- 题库界面 -->
+        <div id="question-bank-screen" class="screen">
+            <div class="screen-header">
+                <button id="back-from-question-bank" class="text-btn">← 返回</button>
+                <h2>题库总览</h2>
+                <span></span>
+            </div>
+            <div class="question-bank-toolbar">
+                <div class="search-box">
+                    <input type="text" id="question-bank-search" placeholder="搜索题目关键词...">
+                    <button id="question-bank-search-btn">搜索</button>
+                </div>
+                <div class="question-bank-legend" style="display:flex;gap:15px;font-size:13px;color:#4a5568;">
+                    <span><span style="display:inline-block;width:12px;height:12px;background:#c6f6d5;border-radius:2px;margin-right:4px;"></span>已做对</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;background:#fed7d7;border-radius:2px;margin-right:4px;"></span>错题</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;background:#fff;border:1px solid #e2e8f0;border-radius:2px;margin-right:4px;"></span>未做</span>
+                </div>
+            </div>
+            <div class="question-bank-stats" id="question-bank-stats"></div>
+            <div class="question-bank-list" id="question-bank-list"></div>
         </div>
 
         <!-- 错题库界面 -->
