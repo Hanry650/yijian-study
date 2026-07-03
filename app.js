@@ -3,7 +3,7 @@
 // ==================== Supabase 配置 ====================
 // Supabase 项目配置
 const SUPABASE_URL = 'https://ugajratioesiisytbcqh.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_UycJ1sLeEwPa5iWREI7Aag_CTJMZyB_';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnYWpyYXRpb2VzaWlzeXRiY3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4NTgzNDAsImV4cCI6MjA5NjQzNDM0MH0.zVZk9oFfvqJKShIjU3-uSXkELGcsjOT8n9Jl48finRQ';
 let supabase = null;
 let currentUser = null;
 
@@ -1654,6 +1654,7 @@ document.getElementById('home-question-bank-btn').addEventListener('click', () =
     showConfigScreen();
     showQuestionBank();
 });
+document.getElementById('question-bank-btn').addEventListener('click', showQuestionBank);
 document.getElementById('back-from-question-bank').addEventListener('click', () => showConfigScreen());
 
 // 题库搜索
