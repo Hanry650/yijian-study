@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>一建做题/复习工具</title>
+    <title>一建复习工具</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
@@ -14,7 +14,7 @@
     <div class="container">
         <!-- 上传界面 -->
         <div id="upload-screen" class="screen active">
-            <h1>一级建造师做题/复习工具</h1>
+            <h1>一级建造师复习工具</h1>
             <div class="upload-area">
                 <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
                 <label for="file-input" class="upload-btn">
@@ -62,10 +62,11 @@
             </div>
             <div class="home-actions" id="home-actions" style="margin-top: 25px; display: none;">
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button id="home-start-btn" class="primary-btn" style="flex: 1; min-width: 120px;">✏️ 做题模式</button>
-                    <button id="home-study-btn" class="primary-btn" style="flex: 1; min-width: 120px; background: #48bb78;">📖 复习模式</button>
+                    <button id="home-start-btn" class="primary-btn" style="flex: 1; min-width: 120px;">✏️ 开始复习</button>
+                    <button id="home-study-btn" class="primary-btn" style="flex: 1; min-width: 120px; background: #48bb78;">📖 学习模式</button>
                     <button id="home-question-bank-btn" class="secondary-btn" style="flex: 1; min-width: 120px;">📋 题库</button>
                     <button id="home-wrong-bank-btn" class="secondary-btn" style="flex: 1; min-width: 120px;">📚 错题本</button>
+                    <button id="home-marked-bank-btn" class="secondary-btn" style="flex: 1; min-width: 120px;">⭐ 标记题目</button>
                 </div>
             </div>
         </div>
@@ -79,9 +80,8 @@
                         <span>出题范围：<span id="chapter-selected-count" style="font-weight:400;color:#718096;font-size:14px;"></span></span>
                         <button id="chapter-sort-btn" class="text-btn" style="font-size:13px;padding:4px 10px;">🔃 倒序</button>
                     </label>
-                    <div id="chapter-checkboxes" class="checkbox-group" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;">
+                    <div id="chapter-checkboxes" class="checkbox-group" style="display:flex;flex-direction:column;gap:0;max-height:250px;overflow-y:auto;padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:#fff;">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;margin-bottom:0;padding:6px 12px;border-radius:6px;background:#f7fafc;transition:background 0.2s;"><input type="checkbox" value="all" checked style="width:18px;height:18px;accent-color:#4299e1;"> 全部章节</label>
-                        <div id="chapter-tree" class="chapter-tree"></div>
                     </div>
                 </div>
                 <div class="option-group">
@@ -111,16 +111,18 @@
             </div>
             <div class="stats" id="stats-info"></div>
             <div class="config-actions">
-                <button id="start-btn" class="primary-btn">做题模式</button>
-                <button id="study-btn" class="primary-btn" style="background: #48bb78;">复习模式</button>
+                <button id="start-btn" class="primary-btn">开始复习</button>
+                <button id="continue-btn" class="primary-btn hidden" style="background: #ed8936;">继续做题</button>
+                <button id="study-btn" class="primary-btn" style="background: #48bb78;">学习模式</button>
                 <button id="question-bank-btn" class="secondary-btn">题库列表</button>
                 <button id="wrong-bank-btn" class="secondary-btn">错题库</button>
+                <button id="marked-bank-btn" class="secondary-btn">⭐ 标记题目</button>
                 <button id="config-export-btn" class="secondary-btn">导出数据</button>
                 <button id="config-cloud-upload-btn" class="primary-btn hidden" style="background: #805ad5;">☁️ 上传云端</button>
             </div>
         </div>
 
-        <!-- 复习模式界面 -->
+        <!-- 学习模式界面 -->
         <div id="study-screen" class="screen">
             <div class="progress-bar">
                 <div id="study-progress-fill"></div>
@@ -128,7 +130,6 @@
             <div class="quiz-info">
                 <span id="study-chapter-tag"></span>
                 <span id="study-progress-text"></span>
-                <span id="study-session-count" style="margin-left:auto;color:#805ad5;font-weight:600;"></span>
             </div>
             <div class="question-card">
                 <div id="study-question-text"></div>
@@ -142,11 +143,11 @@
                 </div>
             </div>
             <div class="quiz-actions">
-                <button id="study-end-btn" class="text-btn">结束复习</button>
+                <button id="study-end-btn" class="text-btn">结束学习</button>
             </div>
         </div>
 
-        <!-- 做题界面 -->
+        <!-- 答题界面 -->
         <div id="quiz-screen" class="screen">
             <div class="progress-bar">
                 <div id="progress-fill"></div>
@@ -154,7 +155,6 @@
             <div class="quiz-info">
                 <span id="chapter-tag"></span>
                 <span id="progress-text"></span>
-                <span id="quiz-session-count" style="margin-left:auto;color:#805ad5;font-weight:600;"></span>
             </div>
             <div class="question-card">
                 <div id="question-text"></div>
@@ -179,8 +179,9 @@
                 </div>
             </div>
             <div class="quiz-actions">
+                <button id="mark-btn" class="text-btn" style="color:#ecc94b;font-weight:600;">☆ 标记本题</button>
                 <button id="skip-btn" class="text-btn">跳过此题</button>
-                <button id="end-btn" class="text-btn">结束做题</button>
+                <button id="end-btn" class="text-btn">结束复习</button>
                 <button id="back-home-btn" class="text-btn">返回首页</button>
             </div>
         </div>
@@ -205,6 +206,23 @@
             </div>
             <div class="question-bank-stats" id="question-bank-stats"></div>
             <div class="question-bank-list" id="question-bank-list"></div>
+        </div>
+
+        <!-- 标记题目界面 -->
+        <div id="marked-bank-screen" class="screen">
+            <div class="screen-header">
+                <button id="back-from-marked" class="text-btn">← 返回</button>
+                <h2>标记题目</h2>
+                <span></span>
+            </div>
+            <div class="question-bank-toolbar">
+                <div class="search-box">
+                    <input type="text" id="marked-search" placeholder="搜索题目关键词...">
+                    <button id="marked-search-btn">搜索</button>
+                </div>
+            </div>
+            <div class="question-bank-stats" id="marked-bank-stats"></div>
+            <div class="question-bank-list" id="marked-bank-list"></div>
         </div>
 
         <!-- 错题库界面 -->
@@ -238,7 +256,7 @@
 
         <!-- 结果界面 -->
         <div id="result-screen" class="screen">
-            <h2>做题完成</h2>
+            <h2>复习完成</h2>
             <div class="result-stats">
                 <div class="stat-item">
                     <span class="stat-num" id="total-count">0</span>

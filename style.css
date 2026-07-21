@@ -238,108 +238,6 @@ select:focus {
     flex-shrink: 0;
 }
 
-/* 章节树形结构 */
-.chapter-tree {
-    display: flex;
-    flex-direction: column;
-}
-
-.chapter-tree-node {
-    display: flex;
-    flex-direction: column;
-}
-
-.chapter-tree-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    cursor: pointer;
-    border-bottom: 1px solid #edf2f7;
-    transition: background 0.2s;
-    user-select: none;
-}
-
-.chapter-tree-header:hover {
-    background: #f7fafc;
-}
-
-.chapter-tree-toggle {
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    color: #718096;
-    flex-shrink: 0;
-    transition: transform 0.2s;
-}
-
-.chapter-tree-toggle.collapsed {
-    transform: rotate(-90deg);
-}
-
-.chapter-tree-header input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #4299e1;
-    cursor: pointer;
-    flex-shrink: 0;
-}
-
-.chapter-tree-label {
-    flex: 1;
-    font-size: 15px;
-    color: #2d3748;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.chapter-tree-count {
-    color: #a0aec0;
-    font-size: 13px;
-    flex-shrink: 0;
-}
-
-.chapter-tree-children {
-    display: flex;
-    flex-direction: column;
-    padding-left: 20px;
-}
-
-.chapter-tree-children.collapsed {
-    display: none;
-}
-
-.chapter-tree-leaf {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    cursor: pointer;
-    border-bottom: 1px solid #edf2f7;
-    transition: background 0.2s;
-}
-
-.chapter-tree-leaf:hover {
-    background: #f7fafc;
-}
-
-.chapter-tree-leaf.checked {
-    background: #ebf8ff;
-    color: #3182ce;
-}
-
-.chapter-tree-leaf input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #4299e1;
-    cursor: pointer;
-    flex-shrink: 0;
-}
-
 .custom-count-input {
     width: 100%;
     padding: 12px 15px;
@@ -597,6 +495,24 @@ select:focus {
     transition: all 0.3s;
 }
 
+.item-practice-btn {
+    background: #c6f6d5;
+    color: #276749;
+}
+
+.item-practice-btn:hover {
+    background: #9ae6b4;
+}
+
+.item-remove-btn {
+    background: #fed7d7;
+    color: #c53030;
+}
+
+.item-remove-btn:hover {
+    background: #feb2b2;
+}
+
 /* 题库总览 */
 .question-bank-toolbar {
     background: #fff;
@@ -716,22 +632,87 @@ select:focus {
     color: #2d3748;
 }
 
-.item-practice-btn {
-    background: #c6f6d5;
-    color: #276749;
+/* 标记题目 */
+.marked-bank-item {
+    padding: 18px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    transition: background 0.2s;
+    cursor: pointer;
+    background: #fff;
 }
 
-.item-practice-btn:hover {
-    background: #9ae6b4;
+.marked-bank-item:last-child {
+    border-bottom: none;
 }
 
-.item-remove-btn {
-    background: #fed7d7;
-    color: #c53030;
+.marked-bank-item:hover {
+    filter: brightness(0.98);
 }
 
-.item-remove-btn:hover {
-    background: #feb2b2;
+.marked-bank-item .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+    margin-bottom: 8px;
+}
+
+.marked-bank-item .item-chapter {
+    background: #ebf8ff;
+    color: #3182ce;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.marked-bank-item .item-status.marked {
+    background: #fefcbf;
+    color: #975a16;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.marked-bank-item .item-question {
+    font-weight: 600;
+    color: #2d3748;
+    line-height: 1.6;
+    margin-bottom: 8px;
+}
+
+.marked-bank-item .item-answer {
+    color: #4a5568;
+    line-height: 1.6;
+    font-size: 14px;
+    display: none;
+}
+
+.marked-bank-item.expanded .item-answer {
+    display: block;
+}
+
+.marked-bank-item .item-answer strong {
+    color: #2d3748;
+}
+
+.marked-bank-item .item-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.marked-bank-item .item-actions button {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s;
 }
 
 .empty-state {
