@@ -336,7 +336,8 @@ select:focus {
     flex-wrap: wrap;
 }
 
-.wrong-bank-batch-bar {
+.wrong-bank-batch-bar,
+.question-bank-batch-bar {
     background: #fff;
     border-radius: 8px;
     padding: 12px 20px;
@@ -522,6 +523,13 @@ select:focus {
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
+.question-bank-toolbar-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+}
+
 .question-bank-stats {
     background: #fff;
     border-radius: 8px;
@@ -546,6 +554,7 @@ select:focus {
     border-bottom: 1px solid #e2e8f0;
     transition: background 0.2s;
     cursor: pointer;
+    -webkit-touch-callout: none;
 }
 
 .question-bank-item:last-child {
@@ -566,6 +575,27 @@ select:focus {
 
 .question-bank-item.untouched {
     background: #fff;
+}
+
+.question-bank-item.selectable {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.question-bank-item .item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.wrong-bank-item .item-checkbox,
+.question-bank-item .item-checkbox {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    accent-color: #4299e1;
+    cursor: pointer;
+    flex-shrink: 0;
 }
 
 .question-bank-item .item-header {
@@ -630,6 +660,54 @@ select:focus {
 
 .question-bank-item .item-answer strong {
     color: #2d3748;
+}
+
+.question-bank-bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    padding: 12px 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+    z-index: 100;
+}
+
+.question-bank-bottom-bar .batch-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.question-bank-bottom-bar .done-btn {
+    background: #c6f6d5;
+    color: #276749;
+}
+
+.question-bank-bottom-bar .wrong-btn {
+    background: #fed7d7;
+    color: #c53030;
+}
+
+.question-bank-bottom-bar .untouched-btn {
+    background: #edf2f7;
+    color: #4a5568;
+}
+
+.question-bank-bottom-bar .finish-btn {
+    background: #4299e1;
+    color: #fff;
+}
+
+#question-bank-screen.edit-mode .question-bank-list {
+    padding-bottom: 80px;
 }
 
 /* 标记题目 */

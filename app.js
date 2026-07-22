@@ -118,16 +118,16 @@ async function cloudUpload() {
 
 // 更新所有上传云端按钮的显示状态
 function updateCloudUploadButtons() {
-    const configBtn = document.getElementById('config-cloud-upload-btn');
-    const resultBtn = document.getElementById('result-cloud-upload-btn');
-
-    if (currentUser && questions.length > 0) {
-        configBtn.classList.remove('hidden');
-        resultBtn.classList.remove('hidden');
-    } else {
-        configBtn.classList.add('hidden');
-        resultBtn.classList.add('hidden');
-    }
+    const buttons = [
+        document.getElementById('config-cloud-upload-btn'),
+        document.getElementById('result-cloud-upload-btn'),
+        document.getElementById('question-bank-cloud-upload-btn')
+    ];
+    const visible = currentUser && questions.length > 0;
+    buttons.forEach(btn => {
+        if (!btn) return;
+        btn.classList.toggle('hidden', !visible);
+    });
 }
 
 async function cloudDownload() {
@@ -284,6 +284,13 @@ let wrongCounts = JSON.parse(localStorage.getItem('wrongCounts') || '{}');  // �
 let wrongQuestions = new Set(Object.keys(wrongCounts).map(Number));  // 错题ID集合（兼容旧数据）
 let correctQuestions = new Set(JSON.parse(localStorage.getItem('correctQuestions') || '[]'));  // 做对题目ID集合
 let markedQuestions = new Set(JSON.parse(localStorage.getItem('markedQuestions') || '[]'));  // 标记题目ID集合
+
+// 题库总览编辑状态
+let questionBankSelectionMode = false;
+let selectedQuestionBankIds = new Set();
+let questionBankContextTarget = null;
+let questionBankLongPressTimer = null;
+let questionBankLongPressTriggered = false;
 let currentQuestions = [];     // 当前轮次的题目列表
 let currentIndex = 0;          // 当前题目索引
 let stats = {                 // 本轮统计
@@ -1737,8 +1744,219 @@ function exportWrongQuestions() {
 
 // ==================== 题库总览 ====================
 function showQuestionBank() {
+    questionBankSelectionMode = false;
+    selectedQuestionBankIds.clear();
+    document.getElementById('question-bank-screen').classList.remove('edit-mode');
+    document.getElementById('question-bank-edit-btn').classList.remove('hidden');
+    document.getElementById('question-bank-cloud-upload-btn').classList.remove('hidden');
+    document.getElementById('question-bank-batch-bar').classList.add('hidden');
+    document.getElementById('question-bank-bottom-bar').classList.add('hidden');
+    document.getElementById('question-bank-select-all').checked = false;
     showScreen('questionBank');
     renderQuestionBank();
+}
+
+function getQuestionBankList() {
+    const searchTerm = document.getElementById('question-bank-search').value.trim().toLowerCase();
+    let list = questions;
+    if (searchTerm) {
+        list = list.filter(q =>
+            q.question.toLowerCase().includes(searchTerm) ||
+            q.answer.toLowerCase().includes(searchTerm) ||
+            q.chapter.toLowerCase().includes(searchTerm)
+        );
+    }
+    return list;
+}
+
+function bindQuestionBankItemEvents(item, q) {
+    let startX = 0, startY = 0;
+
+    const startLongPress = (e) => {
+        if (questionBankSelectionMode) return;
+        if (e.type === 'mousedown' && e.button !== 0) return;
+        const touch = e.touches ? e.touches[0] : null;
+        startX = touch ? touch.clientX : e.clientX;
+        startY = touch ? touch.clientY : e.clientY;
+        item.style.userSelect = 'none';
+        questionBankLongPressTimer = setTimeout(() => {
+            questionBankLongPressTriggered = true;
+            item.style.userSelect = '';
+            showQuestionBankContextMenu(q);
+        }, 500);
+    };
+
+    const cancelLongPress = () => {
+        if (questionBankLongPressTimer) {
+            clearTimeout(questionBankLongPressTimer);
+            questionBankLongPressTimer = null;
+        }
+        item.style.userSelect = '';
+    };
+
+    const moveLongPress = (e) => {
+        if (!questionBankLongPressTimer) return;
+        const touch = e.touches ? e.touches[0] : null;
+        const x = touch ? touch.clientX : e.clientX;
+        const y = touch ? touch.clientY : e.clientY;
+        if (Math.abs(x - startX) > 10 || Math.abs(y - startY) > 10) {
+            cancelLongPress();
+        }
+    };
+
+    item.addEventListener('mousedown', startLongPress);
+    item.addEventListener('touchstart', startLongPress, { passive: true });
+    item.addEventListener('mouseup', cancelLongPress);
+    item.addEventListener('mouseleave', cancelLongPress);
+    item.addEventListener('touchend', cancelLongPress);
+    item.addEventListener('touchmove', moveLongPress, { passive: true });
+
+    item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (questionBankSelectionMode) return;
+        showQuestionBankContextMenu(q);
+    });
+
+    item.addEventListener('click', (e) => {
+        if (questionBankLongPressTriggered) {
+            questionBankLongPressTriggered = false;
+            return;
+        }
+        if (questionBankSelectionMode) {
+            const cb = item.querySelector('.item-checkbox');
+            if (cb && e.target !== cb) {
+                cb.checked = !cb.checked;
+                toggleQuestionBankSelection(q.id);
+            }
+            return;
+        }
+        if (e.target.tagName === 'BUTTON') return;
+        item.classList.toggle('expanded');
+    });
+
+    const cb = item.querySelector('.item-checkbox');
+    if (cb) {
+        cb.addEventListener('change', () => {
+            toggleQuestionBankSelection(q.id);
+        });
+    }
+}
+
+function showQuestionBankContextMenu(q) {
+    questionBankContextTarget = q;
+    document.getElementById('question-bank-context-menu').classList.remove('hidden');
+}
+
+function closeQuestionBankContextMenu() {
+    document.getElementById('question-bank-context-menu').classList.add('hidden');
+    questionBankContextTarget = null;
+}
+
+function startQuizFromQuestion(q) {
+    const list = getQuestionBankList();
+    const startIndex = list.findIndex(item => item.id === q.id);
+    if (startIndex === -1) return;
+
+    const finalQuestions = list.slice(startIndex);
+    if (finalQuestions.length === 0) return;
+
+    if (typeof hasActiveQuizSession === 'function' && hasActiveQuizSession()) {
+        if (!confirm('已有进行中的做题记录，开始新做题将覆盖进度，确定吗？')) {
+            closeQuestionBankContextMenu();
+            return;
+        }
+    }
+
+    currentQuestions = finalQuestions;
+    currentIndex = 0;
+    stats = { total: finalQuestions.length, correct: 0, wrong: 0, skip: 0, wrongList: [] };
+
+    saveQuizSession();
+    showScreen('quiz');
+    showQuestion();
+    closeQuestionBankContextMenu();
+}
+
+function enterQuestionBankEditMode() {
+    questionBankSelectionMode = true;
+    selectedQuestionBankIds.clear();
+    document.getElementById('question-bank-screen').classList.add('edit-mode');
+    document.getElementById('question-bank-edit-btn').classList.add('hidden');
+    document.getElementById('question-bank-cloud-upload-btn').classList.add('hidden');
+    document.getElementById('question-bank-batch-bar').classList.remove('hidden');
+    document.getElementById('question-bank-bottom-bar').classList.remove('hidden');
+    renderQuestionBank();
+    updateQuestionBankBatchUI();
+}
+
+function exitQuestionBankEditMode() {
+    questionBankSelectionMode = false;
+    selectedQuestionBankIds.clear();
+    document.getElementById('question-bank-screen').classList.remove('edit-mode');
+    document.getElementById('question-bank-edit-btn').classList.remove('hidden');
+    document.getElementById('question-bank-cloud-upload-btn').classList.remove('hidden');
+    document.getElementById('question-bank-batch-bar').classList.add('hidden');
+    document.getElementById('question-bank-bottom-bar').classList.add('hidden');
+    document.getElementById('question-bank-select-all').checked = false;
+    renderQuestionBank();
+    updateQuestionBankBatchUI();
+}
+
+function toggleQuestionBankSelection(id) {
+    if (selectedQuestionBankIds.has(id)) selectedQuestionBankIds.delete(id);
+    else selectedQuestionBankIds.add(id);
+    updateQuestionBankBatchUI();
+}
+
+function selectAllQuestionBank() {
+    const list = getQuestionBankList();
+    list.forEach(q => selectedQuestionBankIds.add(q.id));
+    renderQuestionBank();
+    updateQuestionBankBatchUI();
+}
+
+function deselectAllQuestionBank() {
+    selectedQuestionBankIds.clear();
+    renderQuestionBank();
+    updateQuestionBankBatchUI();
+}
+
+function updateQuestionBankBatchUI() {
+    const count = selectedQuestionBankIds.size;
+    document.getElementById('question-bank-selected-count').textContent = `已选 ${count} 题`;
+    const allCheckbox = document.getElementById('question-bank-select-all');
+    const list = getQuestionBankList();
+    allCheckbox.checked = count > 0 && count === list.length;
+}
+
+function applyQuestionBankStatus(status) {
+    const count = selectedQuestionBankIds.size;
+    if (count === 0) return;
+
+    selectedQuestionBankIds.forEach(id => {
+        if (status === 'correct') {
+            correctQuestions.add(id);
+            wrongQuestions.delete(id);
+            delete wrongCounts[id];
+        } else if (status === 'wrong') {
+            correctQuestions.delete(id);
+            wrongQuestions.add(id);
+            wrongCounts[id] = wrongCounts[id] || 1;
+        } else if (status === 'untouched') {
+            correctQuestions.delete(id);
+            wrongQuestions.delete(id);
+            delete wrongCounts[id];
+        }
+    });
+
+    wrongQuestions = new Set(Object.keys(wrongCounts).map(Number));
+
+    localStorage.setItem('wrongCounts', JSON.stringify(wrongCounts));
+    localStorage.setItem('wrongQuestions', JSON.stringify([...wrongQuestions]));
+    localStorage.setItem('correctQuestions', JSON.stringify([...correctQuestions]));
+
+    renderQuestionBank();
+    updateQuestionBankBatchUI();
 }
 
 function renderQuestionBank() {
@@ -1788,24 +2006,28 @@ function renderQuestionBank() {
             statusClass = 'done';
             statusText = '已做对';
         }
+        const isSelected = selectedQuestionBankIds.has(q.id);
 
         return `
-            <div class="question-bank-item ${statusClass}" data-id="${q.id}">
-                <div class="item-header">
-                    <span class="item-chapter">${escapeHtml(q.chapter)}</span>
-                    <span class="item-status">${statusText}</span>
+            <div class="question-bank-item ${statusClass} ${questionBankSelectionMode ? 'selectable' : ''}" data-id="${q.id}">
+                ${questionBankSelectionMode ? `<input type="checkbox" class="item-checkbox" data-id="${q.id}" ${isSelected ? 'checked' : ''}>` : ''}
+                <div class="item-content">
+                    <div class="item-header">
+                        <span class="item-chapter">${escapeHtml(q.chapter)}</span>
+                        <span class="item-status">${statusText}</span>
+                    </div>
+                    <div class="item-question">${escapeHtml(q.question)}</div>
+                    <div class="item-answer"><strong>答案：</strong>${escapeHtml(q.answer)}</div>
                 </div>
-                <div class="item-question">${escapeHtml(q.question)}</div>
-                <div class="item-answer"><strong>答案：</strong>${escapeHtml(q.answer)}</div>
             </div>
         `;
     }).join('');
 
-    // 点击展开/折叠答案
+    // 绑定点击、长摁、右键事件
     container.querySelectorAll('.question-bank-item').forEach(item => {
-        item.addEventListener('click', () => {
-            item.classList.toggle('expanded');
-        });
+        const id = parseInt(item.dataset.id, 10);
+        const q = list.find(x => x.id === id);
+        bindQuestionBankItemEvents(item, q);
     });
 }
 
@@ -2021,6 +2243,25 @@ document.getElementById('back-from-question-bank').addEventListener('click', () 
 document.getElementById('question-bank-search-btn').addEventListener('click', renderQuestionBank);
 document.getElementById('question-bank-search').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') renderQuestionBank();
+});
+
+// 题库状态编辑
+document.getElementById('question-bank-edit-btn').addEventListener('click', enterQuestionBankEditMode);
+document.getElementById('question-bank-finish-edit').addEventListener('click', exitQuestionBankEditMode);
+document.getElementById('question-bank-cloud-upload-btn').addEventListener('click', cloudUpload);
+
+document.getElementById('question-bank-start-here').addEventListener('click', () => {
+    if (questionBankContextTarget) startQuizFromQuestion(questionBankContextTarget);
+});
+document.getElementById('question-bank-back').addEventListener('click', closeQuestionBankContextMenu);
+
+document.getElementById('question-bank-select-all').addEventListener('change', (e) => {
+    if (e.target.checked) selectAllQuestionBank();
+    else deselectAllQuestionBank();
+});
+
+document.querySelectorAll('#question-bank-bottom-bar .batch-btn[data-status]').forEach(btn => {
+    btn.addEventListener('click', () => applyQuestionBankStatus(btn.dataset.status));
 });
 
 // 标记题目
